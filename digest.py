@@ -1,13 +1,16 @@
 import feedparser
 import smtplib
+import json
+import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timezone, timedelta
-import os
+import anthropic
 
 # --- НАЛАШТУВАННЯ ---
 EMAIL = os.environ.get("MY_EMAIL")
 PASSWORD = os.environ.get("MY_PASSWORD")
+ANTHROPIC_KEY = os.environ.get("ANTHROPIC_KEY")
 
 # --- ДЖЕРЕЛА ---
 all_feeds = {
@@ -44,12 +47,78 @@ for name, url in all_feeds.items():
 
 print(f"Зібрано статей: {len(all_articles)}")
 
-# --- HTML ---
-html = "<h1>📰 Мій дайджест новин</h1>"
+# --- AI РЕЗЮМУВАННЯ ---
+articles_text = ""
 for article in all_articles:
-    html += f"<h3><a href='{article['link']}'>{article['title']}</a></h3>"
-    html += f"<p>{article['source']} | {article['date']}</p>"
-    html += "<hr>"
+    articles_text += f"- {article['title']} ({article['source']})\n"
+
+client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=5000,
+    messages=[
+        {"role": "user", "content": f"""Ось список новинних заголовків за сьогодні:
+
+{articles_text}
+
+Згрупуй їх по темах (наприклад: Україна, Близький Схід, Політика ЄС, США і тд).
+Для кожної групи напиши резюме українською. Загальний обсяг всіх резюме — не більше 10000 символів.
+Розподіли їх між темами на свій розсуд — важливіші теми можуть отримати більше тексту, менш важливі — менше.
+Формат відповіді — строго JSON:
+{{
+  "groups": [
+    {{
+      "topic": "Назва теми",
+      "summary": "Резюме...",
+      "articles": ["точний заголовок 1", "точний заголовок 2"]
+    }}
+  ]
+}}
+Повертай ТІЛЬКИ JSON, без зайвого тексту.
+"""}
+    ]
+)
+
+# --- ПАРСИНГ JSON ---
+response_text = message.content[0].text
+clean_text = response_text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+data = json.loads(clean_text)
+
+# --- HTML ---
+links = {}
+for article in all_articles:
+    links[article["title"]] = article["link"]
+
+html = """
+<html>
+<head>
+<style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+    h1 { color: #2c3e50; border-bottom: 2px solid #2c3e50; }
+    h2 { color: #2980b9; margin-top: 30px; }
+    p { line-height: 1.6; color: #333; }
+    ul { background: white; padding: 15px 30px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    li { margin: 8px 0; }
+    a { color: #2980b9; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+</style>
+</head>
+<body>
+<h1>📰 Мій дайджест новин</h1>
+"""
+
+for group in data["groups"]:
+    html += f"<h2>{group['topic']}</h2>"
+    html += f"<p>{group['summary']}</p>"
+    html += "<ul>"
+    for title in group["articles"]:
+        link = next((v for k, v in links.items() if title[:30] in k), "#")
+        html += f"<li><a href='{link}'>{title}</a></li>"
+    html += "</ul><hr>"
+
+html += "</body></html>"
 
 # --- ВІДПРАВКА ---
 msg = MIMEMultipart("alternative")
