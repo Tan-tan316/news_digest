@@ -17,13 +17,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install feedparser
+        run: pip install feedparser anthropic
 
       - name: Run digest
         env:
           MY_EMAIL: ${{ secrets.MY_EMAIL }}
           MY_PASSWORD: ${{ secrets.MY_PASSWORD }}
         run: python digest.py
-       
-      - name: Install dependencies
-        run: pip install feedparser anthropic
+   
