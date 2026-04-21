@@ -23,5 +23,6 @@ jobs:
         env:
           MY_EMAIL: ${{ secrets.MY_EMAIL }}
           MY_PASSWORD: ${{ secrets.MY_PASSWORD }}
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_KEY }}
         run: python digest.py
    
