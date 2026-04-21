@@ -24,3 +24,6 @@ jobs:
           MY_EMAIL: ${{ secrets.MY_EMAIL }}
           MY_PASSWORD: ${{ secrets.MY_PASSWORD }}
         run: python digest.py
+       
+      - name: Install dependencies
+        run: pip install feedparser anthropic
